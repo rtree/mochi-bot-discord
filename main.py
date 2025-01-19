@@ -251,7 +251,7 @@ class MyClient(discord.Client):
 
     async def on_message(self, message):
         # Don't respond to ourselves or messages outside the specified channel
-        if message.author.id == self.user.id or message.channel.name != RESPOND_CHANNEL_NAME:
+        if message.author.id == self.user.id or message.channel.name not in RESPOND_CHANNEL_NAME.split(','):
             return
 
         if message.content.startswith('!hello'):
