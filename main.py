@@ -41,13 +41,17 @@ def parse_prompt(discIn):
     messages = []
     messages.extend(conversation_history)
     messages.append({"role": "user", "content": f"{p_src}"})
-    print("===================messages===================")
-    for conv in messages:
-        print(conv)
     response = client.chat.completions.create(
         model=GPT_MODEL,
         messages=messages
     )
+
+    print("= parse_prompt ============================================")
+    #for conv in messages:
+    #    print(f"prompt: {conv}")
+    print(f"response: {response.choices[0].message.content}")
+    print("= End of parse_prompt =====================================")
+
     return response.choices[0].message.content
 
 # 検索の必要性を判断
@@ -63,6 +67,12 @@ def should_search(discIn):
         model=GPT_MODEL,
         messages=messages
     )
+
+    print("= should_search ============================================")
+    #for conv in messages:
+    #    print(f"prompt: {conv}")
+    print(f"response: {response.choices[0].message.content}")
+    print("= End of should_search =====================================")
     return response.choices[0].message.content
 
 # キーワードを抽出
@@ -84,6 +94,13 @@ def extract_keywords(parsed_text):
         model=GPT_MODEL,
         messages=messages
     )
+
+    print("= extract_keywords ============================================")
+    #for conv in messages:
+    #    print(f"prompt: {conv}")
+    print(f"response: {response.choices[0].message.content}")
+    print("= End of extract_keywords =====================================")
+
     return response.choices[0].message.content
 
 
@@ -104,7 +121,6 @@ def search_bing(query, count=SEARCH_RESULTS):
         print(f"URL: {result['url']}")
         print(f"Snippet: {result['snippet']}")
         print("---")
-
     return search_data
 
 
@@ -161,8 +177,8 @@ def summarize_results(search_results):
     #snippets = "\n".join([result['snippet'] for result in search_results['webPages']['value'][:5]])
     snippets = summarize_results_with_pages(search_results)
 
-    p_src = f"あなたは検索結果を要約し、私の質問への回答を作成します。"
-    p_src = f"{p_src} 会話履歴を踏まえつつ私が知りたいことの主旨を把握の上で、以下の検索結果を要約し回答を作ってください。仮に検索結果が英語でも回答は日本語でお願いします: {snippets}"
+    p_src = f"{CHARACTER}。あなたは検索結果を要約し、私の質問への回答を作成します。"
+    p_src = f"{p_src} 会話履歴を踏まえつつ私が知りたいことの主旨を把握の上で、以下の検索結果を要約し回答を作ってください。仮に検索結果が英語でも回答は日本語でお願いします。なお、回答がより高品質になるのならば、あなたの内部知識を加味して回答を作っても構いません。ただし、要約元にあった Title, URL は必ず元の形式で末尾に記入してください（なお、あなたの内部知識と要約元との差分があると整合性が気になると思いますが、気にせず高品質な回答を作ってくださいね）。URLを書くときはDiscordのAutoEmbedを防ぎたいので<>などで囲んでください。: {snippets}"
     messages = [{"role": "system", "content": f"{CHARACTER}"}]
     messages.extend(conversation_history)
     messages.append({"role": "user", "content": f"{p_src}"})
@@ -178,10 +194,18 @@ def summarize_results(search_results):
     #        {"role": "user", "content": f"以下の検索スニペットを要約してください。: {snippets}"}
     #    ]
     #)
+    #summary = response.choices[0].message.content
+    #urls = search_results.get('urls', [])
+    #sources = "\n".join([f"Source: {url}" for url in urls])
+    #return f"{summary}\n\n{sources}"
+
     summary = response.choices[0].message.content
-    urls = search_results.get('urls', [])
-    sources = "\n".join([f"Source: {url}" for url in urls])
+    titles  = search_results.get('titles', [])  # Assuming titles are available
+    urls    = search_results.get('urls', [])
+    # Combine titles and URLs
+    sources = "\n".join([f"Source: {title} - {url}" for title, url in zip(titles, urls)])
     return f"{summary}\n\n{sources}"
+
 
 #------- End of search part ----------------------------------------
 
@@ -214,27 +238,6 @@ def just_call_openai(discIn):
     )
     return completion.choices[0].message.content
 
-#def create_message_stack(msg,img,prompt):
-#    messages      = []
-#    if img or msg or prompt:
-#        messages.extend(conversation_history)
-#        messages.extend(prompt)
-#        if msg:
-#            if len(msg) > 200:
-#                msg = msg[:200]  # Truncate the request if it exceeds 200 characters
-#        if img:
-#            messages.append( {"role": "user", "content":
-#                             [
-#                                {"type"     : "text"     , "text"     : msg           },
-#                                {"type"     : "image_url", "image_url": {"url": img } }
-#                             ]
-#                            })
-#            # messages.append( {"role": "user", "content": f"{msg}\n（画像URL: {img}）"})
-#        else:
-#            if msg:
-#                messages.append( {"role": "user", "content": msg})
-#    return messages
-
 async def ai_respond(discIn,img):
     try:
         #result = just_call_openai(discIn)
@@ -262,8 +265,8 @@ class MyClient(discord.Client):
             if img:
                 img = img.url if img.content_type.startswith('image/')  else None
             print(f"-User input------------------------------------------------------------------")
-            print(f"Message content: '{msg}'")  # Directly print the message content
-            print(f"Image          : '{img}'")  # Directly print the message content
+            print(f"  Message content: '{msg}'")  # Directly print the message content
+            print(f"  Image          : '{img}'")  # Directly print the message content
 
             # ------ Add user input to conversation history
             discIn = []
@@ -280,14 +283,16 @@ class MyClient(discord.Client):
 
             # ------ Add assistant output to conversation history
             conversation_history.append({"role": "assistant", "content": response})
+            print(f"-Agent input------------------------------------------------------------------")
+            print(f"  Response content:'{response}'")  # Directly print the message content
 
             #conversation_history.append(f"ユーザ（{message.author}): {msg}\n")
             #if img:
             #    conversation_history.append(f"ユーザ（{message.author}): Image_Url {img}\n")
             #conversation_history.append(f"AI({AINAME}): {response}\n")
-            print("-Dump of conversation--------------------------------------------------------")
-            for conv in conversation_history:
-                print(conv) 
+            #print("-Dump of conversation--------------------------------------------------------")
+            #for conv in conversation_history:
+            #    print(conv) 
 
 # Initialize the client with the specified intents
 d_client = MyClient(intents=intents)
