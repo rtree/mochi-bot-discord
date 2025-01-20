@@ -18,6 +18,7 @@ BING_API_KEY         = os.getenv('BING_API_KEY')
 RESPOND_CHANNEL_NAME = os.getenv('RESPOND_CHANNEL_NAME')
 HISTORY_LENGTH       = 10
 SEARCH_RESULTS       = 3
+MAX_CONTENT_LENGTH   = 5000
 #GPT_MODEL            = 'gpt-4-turbo-preview'
 GPT_MODEL            = os.getenv('GPT_MODEL')
 AINAME               = "もちお"
@@ -253,7 +254,6 @@ class MyClient(discord.Client):
         print(f'Logged in as {self.user.name}({self.user.id})')
 
     async def on_message(self, message):
-        # Don't respond to ourselves or messages outside the specified channel
         if message.author.id == self.user.id or message.channel.name not in RESPOND_CHANNEL_NAME.split(','):
             return
 
@@ -263,36 +263,41 @@ class MyClient(discord.Client):
             msg = message.content
             img = message.attachments[0] if message.attachments else None
             if img:
-                img = img.url if img.content_type.startswith('image/')  else None
-            print(f"-User input------------------------------------------------------------------")
-            print(f"  Message content: '{msg}'")  # Directly print the message content
-            print(f"  Image          : '{img}'")  # Directly print the message content
+                img = img.url if img.content_type.startswith('image/') else None
+            
+            urls = [word for word in msg.split() if word.startswith('http')]
+            if len(urls) > 4:
+                msg += f"\n[Note: {len(urls) - 3} URLs truncated]"
+                urls = urls[:3]
+            
+            extracted_content = []
+            for url in urls:
+                content, content_type = fetch_page_content(url)
+                if content and content_type in ["PDF", "HTML"]:
+                    extracted_content.append(f"\n[Content from {url} ({content_type})]: {content[:MAX_CONTENT_LENGTH]}...")
 
-            # ------ Add user input to conversation history
+            msg = msg[:200]  # Truncate the message if too long
+            msg += ''.join(extracted_content)
+
+            print(f"-User input------------------------------------------------------------------")
+            print(f"  Message content: '{msg}'")
+            print(f"  Image          : '{img}'")
+
             discIn = []
-            if msg and len(msg) > 200:
-                msg = msg[:200]
             if img:
                 discIn.append({"role": "user", "content": f"{msg}\n(画像URL: {img})"})
             else:
                 if msg:
                     discIn.append({"role": "user", "content": msg})
             conversation_history.extend(discIn)
-            response = await ai_respond(discIn,img)
+            
+            response = await ai_respond(discIn, img)
             await message.channel.send(response)
-
-            # ------ Add assistant output to conversation history
+            
             conversation_history.append({"role": "assistant", "content": response})
             print(f"-Agent input------------------------------------------------------------------")
-            print(f"  Response content:'{response}'")  # Directly print the message content
+            print(f"  Response content:'{response}'")
 
-            #conversation_history.append(f"ユーザ（{message.author}): {msg}\n")
-            #if img:
-            #    conversation_history.append(f"ユーザ（{message.author}): Image_Url {img}\n")
-            #conversation_history.append(f"AI({AINAME}): {response}\n")
-            #print("-Dump of conversation--------------------------------------------------------")
-            #for conv in conversation_history:
-            #    print(conv) 
 
 # Initialize the client with the specified intents
 d_client = MyClient(intents=intents)
