@@ -394,80 +394,81 @@ class MyClient(discord.Client):
         if message.content.startswith('!hello'):
             await message.channel.send('Hello!')
         else:
-            msg = message.content
-            img_url = None
+            async with message.channel.typing():  # Show bot is typing
+                msg = message.content
+                img_url = None
 
-            # ------------------------- Check attachments -------------------------
-            # If there's any attachment, we check if it's an image, PDF, or HTML.
-            attached_text_list = []  # <-- CHANGED/ADDED: store text from PDF/HTML
+                # ------------------------- Check attachments -------------------------
+                # If there's any attachment, we check if it's an image, PDF, or HTML.
+                attached_text_list = []  # <-- CHANGED/ADDED: store text from PDF/HTML
 
-            for attachment in message.attachments:
-                # If it's an image
-                if (attachment.content_type
-                        and attachment.content_type.startswith('image/')):
-                    img_url = attachment.url
+                for attachment in message.attachments:
+                    # If it's an image
+                    if (attachment.content_type
+                            and attachment.content_type.startswith('image/')):
+                        img_url = attachment.url
 
-                # If it's PDF or HTML
-                elif attachment.content_type and (
-                        attachment.content_type.startswith('application/pdf')
-                        or attachment.content_type.startswith('text/html')
-                ):
-                    parsed_content, ctype = await parse_discord_attachment(attachment)
-                    if parsed_content:
-                        attached_text_list.append(
-                            f"\n[Content from attached {ctype} file '{attachment.filename}']:\n{parsed_content}\n"
+                    # If it's PDF or HTML
+                    elif attachment.content_type and (
+                            attachment.content_type.startswith('application/pdf')
+                            or attachment.content_type.startswith('text/html')
+                    ):
+                        parsed_content, ctype = await parse_discord_attachment(attachment)
+                        if parsed_content:
+                            attached_text_list.append(
+                                f"\n[Content from attached {ctype} file '{attachment.filename}']:\n{parsed_content}\n"
+                            )
+                # --------------------------------------------------------------------
+
+                # Check for raw URLs in the user text
+                urls = [word for word in msg.split() if word.startswith('http')]
+                if len(urls) > 4:
+                    msg += f"\n[Note: {len(urls) - 3} URLs truncated]"
+                    urls = urls[:3]
+
+                # Fetch content from URLs concurrently
+                extracted_content = []
+                tasks = [fetch_page_content_async(url) for url in urls]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                for url, res in zip(urls, results):
+                    if isinstance(res, Exception):
+                        continue
+                    content, content_type = res
+                    if content and content_type in ["PDF", "HTML"]:
+                        extracted_content.append(
+                            f"\n[Content from {url} ({content_type})]: {content[:MAX_CONTENT_LENGTH]}..."
                         )
-            # --------------------------------------------------------------------
 
-            # Check for raw URLs in the user text
-            urls = [word for word in msg.split() if word.startswith('http')]
-            if len(urls) > 4:
-                msg += f"\n[Note: {len(urls) - 3} URLs truncated]"
-                urls = urls[:3]
+                # Combine everything
+                msg = msg[:MAX_DISCORD_LENGTH]  # Truncate user message if needed
+                msg += ''.join(extracted_content)
+                msg += ''.join(attached_text_list)  # <-- CHANGED/ADDED
 
-            # Fetch content from URLs concurrently
-            extracted_content = []
-            tasks = [fetch_page_content_async(url) for url in urls]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            for url, res in zip(urls, results):
-                if isinstance(res, Exception):
-                    continue
-                content, content_type = res
-                if content and content_type in ["PDF", "HTML"]:
-                    extracted_content.append(
-                        f"\n[Content from {url} ({content_type})]: {content[:MAX_CONTENT_LENGTH]}..."
-                    )
+                print("-User input------------------------------------------------------------------")
+                print(f"  Message content: '{msg}'")
+                print(f"  Image          : '{img_url}'")
 
-            # Combine everything
-            msg = msg[:MAX_DISCORD_LENGTH]  # Truncate user message if needed
-            msg += ''.join(extracted_content)
-            msg += ''.join(attached_text_list)  # <-- CHANGED/ADDED
+                # Build the user portion for conversation
+                discIn = []
+                if img_url:
+                    discIn.append({"role": "user", "content": f"{msg}\n(画像URL: {img_url})"})
+                else:
+                    if msg:
+                        discIn.append({"role": "user", "content": msg})
 
-            print("-User input------------------------------------------------------------------")
-            print(f"  Message content: '{msg}'")
-            print(f"  Image          : '{img_url}'")
+                conversation_history.extend(discIn)
 
-            # Build the user portion for conversation
-            discIn = []
-            if img_url:
-                discIn.append({"role": "user", "content": f"{msg}\n(画像URL: {img_url})"})
-            else:
-                if msg:
-                    discIn.append({"role": "user", "content": msg})
+                # Get AI response
+                response = await ai_respond(discIn, img_url)
 
-            conversation_history.extend(discIn)
+                # Send response to Discord
+                await send_long_message(message.channel, response)
+                #await message.channel.send(response)
 
-            # Get AI response
-            response = await ai_respond(discIn, img_url)
-
-            # Send response to Discord
-            await send_long_message(message.channel, response)
-            #await message.channel.send(response)
-
-            # Add AI response to conversation history
-            conversation_history.append({"role": "assistant", "content": response})
-            print("-Agent response--------------------------------------------------------------")
-            print(f"  Response content:'{response}'")
+                # Add AI response to conversation history
+                conversation_history.append({"role": "assistant", "content": response})
+                print("-Agent response--------------------------------------------------------------")
+                print(f"  Response content:'{response}'")
 
 
 # Initialize the client with the specified intents
