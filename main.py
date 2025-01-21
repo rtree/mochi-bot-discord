@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 import lxml
 from PyPDF2 import PdfReader
 from io import BytesIO
+import base64
 
 # Load environment variables
 load_dotenv()
@@ -19,6 +20,8 @@ RESPOND_CHANNEL_NAME = os.getenv('RESPOND_CHANNEL_NAME')
 HISTORY_LENGTH       = 10
 SEARCH_RESULTS       = 5
 MAX_DISCORD_LENGTH   = 10000
+MAX_DISCORD_POST_ATTACHMENTS = 3
+MAX_DISCORD_POST_URLS        = 3
 MAX_DISCORD_REPLY_LENGTH = 2000 
 MAX_CONTENT_LENGTH   = 5000
 REPUTABLE_DOMAINS = [
@@ -174,6 +177,11 @@ def fetch_page_content(url):
             soup = BeautifulSoup(response.content, 'lxml')
             return soup.get_text(separator='\n', strip=True)[:MAX_CONTENT_LENGTH], "HTML"
 
+        elif content_type.startswith('image/'):
+            base64_img = base64.b64encode(response.content).decode('utf-8')
+            data_url = f"data:{content_type};base64,{base64_img}"
+            return (data_url, "Image")
+
         else:
             return None, "Unsupported"
     except Exception as e:
@@ -200,7 +208,11 @@ async def fetch_page_content_async(url):
             elif 'text/html' in content_type:
                 soup = BeautifulSoup(response.content, 'lxml')
                 text = soup.get_text(separator='\n', strip=True)
-                return text[:MAX_CONTENT_LENGTH], "HTML"
+                return text[:MAX_CONTENT_LENGTH], "HTML"        
+            elif content_type.startswith('image/'):
+                base64_img = base64.b64encode(response.content).decode('utf-8')
+                data_url = f"data:{content_type};base64,{base64_img}"
+                return data_url, "Image"
             else:
                 return None, "Unsupported"
 
@@ -401,18 +413,12 @@ class MyClient(discord.Client):
                 # ------------------------- Check attachments -------------------------
                 # If there's any attachment, we check if it's an image, PDF, or HTML.
                 attached_text_list = []  # <-- CHANGED/ADDED: store text from PDF/HTML
-
-                for attachment in message.attachments:
-                    # If it's an image
-                    if (attachment.content_type
-                            and attachment.content_type.startswith('image/')):
+                for attachment in message.attachments[:MAX_DISCORD_POST_ATTACHMENTS]:
+                    if (attachment.content_type and attachment.content_type.startswith('image/')):
                         img_url = attachment.url
-
-                    # If it's PDF or HTML
                     elif attachment.content_type and (
                             attachment.content_type.startswith('application/pdf')
-                            or attachment.content_type.startswith('text/html')
-                    ):
+                            or attachment.content_type.startswith('text/html')):
                         parsed_content, ctype = await parse_discord_attachment(attachment)
                         if parsed_content:
                             attached_text_list.append(
@@ -422,9 +428,9 @@ class MyClient(discord.Client):
 
                 # Check for raw URLs in the user text
                 urls = [word for word in msg.split() if word.startswith('http')]
-                if len(urls) > 4:
-                    msg += f"\n[Note: {len(urls) - 3} URLs truncated]"
-                    urls = urls[:3]
+                if len(urls) > MAX_DISCORD_POST_URLS + 1:
+                    msg += f"\n[Note: {len(urls) - MAX_DISCORD_POST_ATTACHMENTS} URLs truncated]"
+                    urls = urls[:MAX_DISCORD_POST_ATTACHMENTS]
 
                 # Fetch content from URLs concurrently
                 extracted_content = []
@@ -434,10 +440,14 @@ class MyClient(discord.Client):
                     if isinstance(res, Exception):
                         continue
                     content, content_type = res
-                    if content and content_type in ["PDF", "HTML"]:
+                    
+                    #print(f"number of urls is /// {url} /// {content_type} /// {content}")
+                    if content and (content_type in ["PDF", "HTML"]):
                         extracted_content.append(
                             f"\n[Content from {url} ({content_type})]: {content[:MAX_CONTENT_LENGTH]}..."
                         )
+                    elif content and (content_type in ["Image"]):
+                        img_url = url
 
                 # Combine everything
                 msg = msg[:MAX_DISCORD_LENGTH]  # Truncate user message if needed
@@ -451,7 +461,24 @@ class MyClient(discord.Client):
                 # Build the user portion for conversation
                 discIn = []
                 if img_url:
-                    discIn.append({"role": "user", "content": f"{msg}\n(画像URL: {img_url})"})
+                    #discIn.append({"role": "user", "content": f"{msg}\n(画像URL: {img_url})"})
+                    img_response = requests.get(img_url)
+                    base64_img   = base64.b64encode(img_response.content).decode('utf-8')
+                    data_url     = f"data:image/png;base64,{base64_img}"
+                    discIn.append(
+                        {
+                            "role": "user",
+                            "content": [
+                                { "type": "text", "text": f"msg" },
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"{data_url}",
+                                    },
+                                }
+                            ],
+                        },
+                    )
                 else:
                     if msg:
                         discIn.append({"role": "user", "content": msg})
