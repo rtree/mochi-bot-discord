@@ -270,7 +270,7 @@ class Mochio(discord.Client):
             elif attachment.content_type and (
                     attachment.content_type.startswith('application/pdf')
                     or attachment.content_type.startswith('text/html')):
-                parsed_content, ctype = await _parse_discord_attachment(attachment)
+                parsed_content, ctype = await self._parse_discord_attachment(attachment)
                 if parsed_content:
                     attached_text_list.append(
                         f"\n[Content from attached {ctype} file '{attachment.filename}']:\n{parsed_content}\n"
