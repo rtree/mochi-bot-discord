@@ -432,12 +432,18 @@ class MyClient(discord.Client):
                 # Get AI response
                 response = await ai_respond(discIn, img_url)
 
+                # Check if the response contains an error message
+                if response.startswith("Error:"):
+                    # Remove the last added user message from the conversation history
+                    conversation_history.pop()
+                else:
+                    # Add AI response to conversation history
+                    conversation_history.append({"role": "assistant", "content": response})
+
                 # Send response to Discord
                 await send_long_message(message.channel, response)
                 #await message.channel.send(response)
 
-                # Add AI response to conversation history
-                conversation_history.append({"role": "assistant", "content": response})
                 print("-Agent response--------------------------------------------------------------")
                 print(f"  Response content:'{response}'")
 
