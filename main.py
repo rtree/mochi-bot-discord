@@ -24,21 +24,11 @@ MAX_DISCORD_POST_ATTACHMENTS = 3
 MAX_DISCORD_POST_URLS        = 3
 MAX_DISCORD_REPLY_LENGTH = 2000 
 MAX_CONTENT_LENGTH   = 5000
-REPUTABLE_DOMAINS = [
-    "go.jp", "gov",  # Government and public sector
-    "scholar.google.com", "ci.nii.ac.jp", "pubmed.ncbi.nlm.nih.gov", "arxiv.org", "jstage.jst.go.jp", "ac.jp",  # Academic and research databases
-    "nikkei.com",  # News and business
-    "nature.com", "sciencedirect.com", "springer.com", "wiley.com",  # Scientific publishers
-    "ieee.org", "researchgate.net",  # Technical and engineering
-    "cambridge.org", "oxfordjournals.org",  # Prestigious university publishers
-    "jamanetwork.com", "nejm.org", "plos.org"  # Medical and health research
-]
+REPUTABLE_DOMAINS = []
 
 #GPT_MODEL            = 'gpt-4-turbo-preview'
 GPT_MODEL            = os.getenv('GPT_MODEL')
 AINAME               = "もちお"
-#CHARACTER            = 'あなたは家族みんなのアシスタントの猫です。ちょっといたずらで賢くかわいい小さな男の子の猫としてお話してね。語尾は にゃ　とか　だよ　とか可愛らしくしてください'
-#CHARACTER            = 'あなたは家族みんなのアシスタントの猫です。ただ、語尾ににゃをつけないでください。むしろソフトバンクCMにおける「お父さん」犬のようにしゃべってください。たまにもののけ姫のモロのようにしゃべってもよいです'
 CHARACTER            = f'あなたは家族みんなのアシスタントの猫で、「{AINAME}」という名前です。ちょっといたずらで賢くかわいい小さな男の子の猫としてお話してね。語尾は だよ　とか可愛らしくしてください。語尾に にゃ にゃん をつけないでください。数式・表・箇条書きなどのドキュメントフォーマッティングはdiscordに表示できる形式がいいな'
 client = OpenAI(api_key=OPENAI_API_KEY)
 # Initialize a deque with a maximum length to store conversation history
@@ -122,25 +112,6 @@ def extract_keywords(parsed_text):
     return response.choices[0].message.content
 
 
-# Bing Search APIを使用して検索
-#def search_bing(query, count=SEARCH_RESULTS):
-#    url = "https://api.bing.microsoft.com/v7.0/search"
-#    headers = {"Ocp-Apim-Subscription-Key": BING_API_KEY}
-#    params = {"q": query, "count": count}
-#    response = requests.get(url, headers=headers, params=params)
-#    response.raise_for_status()
-#    search_data = response.json()
-#    # 検索結果に情報源のURLを追加
-#    search_data['urls'] = [result['url'] for result in search_data['webPages']['value'][:SEARCH_RESULTS]]
-#
-#    print("Bing Search Results:")
-#    for result in search_data['webPages']['value'][:count]:
-#        print(f"Title: {result['name']}")
-#        print(f"URL: {result['url']}")
-#        print(f"Snippet: {result['snippet']}")
-#        print("---")
-#    return search_data
-
 def search_bing(query, domains=REPUTABLE_DOMAINS, count=SEARCH_RESULTS):
     url = "https://api.bing.microsoft.com/v7.0/search"
     headers = {"Ocp-Apim-Subscription-Key": BING_API_KEY}
@@ -160,35 +131,6 @@ def search_bing(query, domains=REPUTABLE_DOMAINS, count=SEARCH_RESULTS):
         print(f"Snippet: {result['snippet']}")
         print("---")
     return search_data
-
-
-def fetch_page_content(url):
-    try:
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        content_type = response.headers.get('Content-Type', '')
-
-        if 'application/pdf' in content_type:
-            pdf_reader = PdfReader(BytesIO(response.content))
-            pdf_text = "".join(page.extract_text() for page in pdf_reader.pages)
-            return pdf_text[:MAX_CONTENT_LENGTH], "PDF"
-
-        elif 'text/html' in content_type:
-            soup = BeautifulSoup(response.content, 'lxml')
-            return soup.get_text(separator='\n', strip=True)[:MAX_CONTENT_LENGTH], "HTML"
-
-        elif content_type.startswith('image/'):
-            base64_img = base64.b64encode(response.content).decode('utf-8')
-            data_url = f"data:{content_type};base64,{base64_img}"
-            return (data_url, "Image")
-
-        else:
-            return None, "Unsupported"
-    except Exception as e:
-        print(f"Error fetching {url}: {str(e)}")
-        return None, "Error"
-
-################################################################################################################
 
 async def fetch_page_content_async(url):
     """
@@ -309,7 +251,7 @@ async def search_or_call_openai_async(discIn, img):
     then summarize. Otherwise call GPT directly.
     """
     # If there's an image or an http link, skip external search logic
-    if img or any("http" in entry["content"] for entry in discIn):
+    if img:
         print("Skipping search and calling OpenAI directly.")
         return just_call_openai(discIn)
     else:
@@ -461,24 +403,24 @@ class MyClient(discord.Client):
                 # Build the user portion for conversation
                 discIn = []
                 if img_url:
-                    #discIn.append({"role": "user", "content": f"{msg}\n(画像URL: {img_url})"})
+                    discIn.append({"role": "user", "content": f"{msg}\n(画像URL: {img_url})"})
                     #img_response = requests.get(img_url)
                     #base64_img   = base64.b64encode(img_response.content).decode('utf-8')
                     #data_url     = f"data:image/png;base64,{base64_img}"
-                    discIn.append(
-                        {
-                            "role": "user",
-                            "content": [
-                                { "type": "text", "text": f"msg" },
-                                {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": f"{img_url}",
-                                    },
-                                }
-                            ],
-                        },
-                    )
+                    # discIn.append(
+                    #     {
+                    #         "role": "user",
+                    #         "content": [
+                    #             { "type": "text", "text": f"msg" },
+                    #             {
+                    #                 "type": "image_url",
+                    #                 "image_url": {
+                    #                     "url": f"{img_url}",
+                    #                 },
+                    #             }
+                    #         ],
+                    #     },
+                    # )
                 else:
                     if msg:
                         discIn.append({"role": "user", "content": msg})
