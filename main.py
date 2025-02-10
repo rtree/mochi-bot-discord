@@ -36,7 +36,7 @@ class Analyst:
     def __init__(self, config, context):
         self.config = config
         self.context = context
-        self.aiclient = OpenAI(self.config.OPENAI_API_KEY)
+        self.aiclient = OpenAI(api_key=self.config.OPENAI_API_KEY)
 
     def _parse_prompt(self, discIn):
         p_src = f"あなたはユーザーのプロンプトを分析し、主題、サブテーマ、関連キーワードを抽出するアシスタントです。"
@@ -103,7 +103,7 @@ class Researcher:
     def __init__(self, config, context):
         self.config = config
         self.context = context
-        self.aiclient = OpenAI(self.config.OPENAI_API_KEY)
+        self.aiclient = OpenAI(api_key=self.config.OPENAI_API_KEY)
 
     def _search_bing(self, query, domains=None, count=None):
         if domains is None:
