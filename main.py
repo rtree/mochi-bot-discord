@@ -6,66 +6,46 @@ import asyncio
 from collections import deque
 import requests
 from bs4 import BeautifulSoup
-import lxml
 from PyPDF2 import PdfReader
 from io import BytesIO
 import base64
 
 # Load environment variables
 load_dotenv()
-DISCORD_BOT_TOKEN    = os.getenv('DISCORD_BOT_TOKEN')
-OPENAI_API_KEY       = os.getenv('OPENAI_API_KEY')
-BING_API_KEY         = os.getenv('BING_API_KEY')
-RESPOND_CHANNEL_NAME = os.getenv('RESPOND_CHANNEL_NAME')
-HISTORY_LENGTH       = 5
-SEARCH_RESULTS       = 8
-MAX_DISCORD_LENGTH   = 10000
-MAX_DISCORD_POST_ATTACHMENTS = 3
-MAX_DISCORD_POST_URLS        = 3
-MAX_DISCORD_REPLY_LENGTH = 2000 
-MAX_CONTENT_LENGTH   = 5000
-REPUTABLE_DOMAINS = []
-
-#GPT_MODEL            = 'gpt-4-turbo-preview'
-GPT_MODEL            = os.getenv('GPT_MODEL')
-AINAME               = "もちお"
-CHARACTER            = f'あなたは家族みんなのアシスタントの猫で、「{AINAME}」という名前です。ちょっといたずらで賢くかわいい小さな男の子の猫としてお話してね。語尾は だよ　とか可愛らしくしてください。語尾に にゃ にゃん をつけないでください。数式・表・箇条書きなどのドキュメントフォーマッティングはdiscordに表示できる形式がいいな'
-client = OpenAI(api_key=OPENAI_API_KEY)
-# Initialize a deque with a maximum length to store conversation history
-conversation_history = deque(maxlen=HISTORY_LENGTH)  # Adjust the size as needed
 
 class Config:
     def __init__(self):
-        self.discord_bot_token = DISCORD_BOT_TOKEN
-        self.openai_api_key = OPENAI_API_KEY
-        self.bing_api_key = BING_API_KEY
-        self.respond_channel_name = RESPOND_CHANNEL_NAME
-        self.history_length = HISTORY_LENGTH
-        self.search_results = SEARCH_RESULTS
-        self.max_discord_length = MAX_DISCORD_LENGTH
-        self.max_discord_post_attachments = MAX_DISCORD_POST_ATTACHMENTS
-        self.max_discord_post_urls = MAX_DISCORD_POST_URLS
-        self.max_discord_reply_length = MAX_DISCORD_REPLY_LENGTH
-        self.max_content_length = MAX_CONTENT_LENGTH
-        self.reputable_domains = REPUTABLE_DOMAINS
-        self.gpt_model = GPT_MODEL
-        self.ainame = AINAME
-        self.character = CHARACTER
+        self.DISCORD_BOT_TOKEN = os.getenv('DISCORD_BOT_TOKEN')
+        self.OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+        self.BING_API_KEY = os.getenv('BING_API_KEY')
+        self.RESPOND_CHANNEL_NAME = os.getenv('RESPOND_CHANNEL_NAME')
+        self.HISTORY_LENGTH = 5
+        self.SEARCH_RESULTS = 8
+        self.MAX_DISCORD_LENGTH = 10000
+        self.MAX_DISCORD_POST_ATTACHMENTS = 3
+        self.MAX_DISCORD_POST_URLS = 3
+        self.MAX_DISCORD_REPLY_LENGTH = 2000
+        self.MAX_CONTENT_LENGTH = 5000
+        self.REPUTABLE_DOMAINS = []
+        self.GPT_MODEL = os.getenv('GPT_MODEL')
+        self.AINAME = "もちお"
+        self.CHARACTER = f'あなたは家族みんなのアシスタントの猫で、「{self.AINAME}」という名前です。ちょっといたずらで賢くかわいい小さな男の子の猫としてお話してね。語尾は だよ　とか可愛らしくしてください。語尾に にゃ にゃん をつけないでください。数式・表・箇条書きなどのドキュメントフォーマッティングはdiscordに表示できる形式がいいな'
 
-config = Config()
 
 class Analyst:
-    def __init__(self, config):
+    def __init__(self, config, context):
         self.config = config
+        self.context = context
+        self.aiclient = OpenAI(self.config.OPENAI_API_KEY)
 
     def _parse_prompt(self, discIn):
         p_src = f"あなたはユーザーのプロンプトを分析し、主題、サブテーマ、関連キーワードを抽出するアシスタントです。"
         p_src = f"{p_src} 会話履歴を分析し、直近のユーザ入力への回答を満たす主題、サブテーマ、関連キーワードを抽出してください"
         messages = []
-        messages.extend(conversation_history)
+        messages.extend(self.context)
         messages.append({"role": "user", "content": f"{p_src}"})
-        response = client.chat.completions.create(
-            model=self.config.gpt_model,
+        response = self.aiclient.chat.completions.create(
+            model=self.config.GPT_MODEL,
             messages=messages
         )
 
@@ -79,10 +59,10 @@ class Analyst:
         p_src = f"あなたはあなたは賢いアシスタントです。会話履歴を分析し、直近のユーザ入力への回答に、外部の最新情報が必要かどうかを判断してください。"
         p_src = f"{p_src} 判断の結果、外部の最新情報が必要なときは Yes の単語だけ返してください"
         messages = []
-        messages.extend(conversation_history)
+        messages.extend(self.context)
         messages.append({"role": "user", "content": f"{p_src}"})
-        response = client.chat.completions.create(
-            model=self.config.gpt_model,
+        response = self.aiclient.chat.completions.create(
+            model=self.config.GPT_MODEL,
             messages=messages
         )
 
@@ -95,10 +75,10 @@ class Analyst:
         p_src = f"あなたは解析されたプロンプト情報から簡潔な検索キーワードを抽出します。"
         p_src = f"会話履歴を踏まえつつ、このテキストから会話の目的を最も達成する検索キーワードを抽出してください。結果は検索キーワードのみを半角スペースで区切って出力してください:{parsed_text}"
         messages = []
-        messages.extend(conversation_history)
+        messages.extend(self.context)
         messages.append({"role": "user", "content": f"{p_src}"})
-        response = client.chat.completions.create(
-            model=self.config.gpt_model,
+        response = self.aiclient.chat.completions.create(
+            model=self.config.GPT_MODEL,
             messages=messages
         )
 
@@ -120,17 +100,19 @@ class Analyst:
             return None
 
 class Researcher:
-    def __init__(self, config):
+    def __init__(self, config, context):
         self.config = config
+        self.context = context
+        self.aiclient = OpenAI(self.config.OPENAI_API_KEY)
 
     def _search_bing(self, query, domains=None, count=None):
         if domains is None:
-            domains = self.config.reputable_domains
+            domains = self.config.REPUTABLE_DOMAINS
         if count is None:
-            count = self.config.search_results
+            count = self.config.SEARCH_RESULTS
 
         url = "https://api.bing.microsoft.com/v7.0/search"
-        headers = {"Ocp-Apim-Subscription-Key": self.config.bing_api_key}
+        headers = {"Ocp-Apim-Subscription-Key": self.config.BING_API_KEY}
         query = f"{query}"
         params = {"q": query, "count": count}
         response = requests.get(url, headers=headers, params=params)
@@ -156,11 +138,11 @@ class Researcher:
                 if 'application/pdf' in content_type:
                     pdf_reader = PdfReader(BytesIO(response.content))
                     pdf_text = "".join(page.extract_text() for page in pdf_reader.pages)
-                    return pdf_text[:self.config.max_content_length], "PDF"
+                    return pdf_text[:self.config.MAX_CONTENT_LENGTH], "PDF"
                 elif 'text/html' in content_type:
                     soup = BeautifulSoup(response.content, 'lxml')
                     text = soup.get_text(separator='\n', strip=True)
-                    return text[:self.config.max_content_length], "HTML"
+                    return text[:self.config.MAX_CONTENT_LENGTH], "HTML"
                 elif content_type.startswith('image/'):
                     base64_img = base64.b64encode(response.content).decode('utf-8')
                     data_url = f"data:{content_type};base64,{base64_img}"
@@ -177,7 +159,7 @@ class Researcher:
 
     async def _summarize_results_with_pages_async(self, search_results):
         content_list = []
-        web_results = search_results.get('webPages', {}).get('value', [])[:self.config.search_results]
+        web_results = search_results.get('webPages', {}).get('value', [])[:self.config.SEARCH_RESULTS]
 
         tasks = [self._fetch_page_content_async(r['url']) for r in web_results]
         pages = await asyncio.gather(*tasks, return_exceptions=True)
@@ -207,7 +189,7 @@ class Researcher:
         snippets = await self._summarize_results_with_pages_async(search_results)
 
         p_src = (
-            f"{self.config.character}。あなたは検索結果を要約し、私の質問への回答を作成します。"
+            f"{self.config.CHARACTER}。あなたは検索結果を要約し、私の質問への回答を作成します。"
             " 会話履歴を踏まえつつ私が知りたいことの主旨を把握の上で、以下の検索結果を要約し回答を作ってください。"
             " 仮に検索結果が英語でも回答は日本語でお願いします。"
             " なお、回答がより高品質になるのならば、あなたの内部知識を加味して回答を作っても構いません。"
@@ -217,12 +199,12 @@ class Researcher:
         )
 
         def blocking_chat_completion():
-            messages = [{"role": "system", "content": self.config.character}]
-            messages.extend(conversation_history)
+            messages = [{"role": "system", "content": self.config.CHARACTER}]
+            messages.extend(self.context)
             messages.append({"role": "user", "content": p_src})
 
-            return client.chat.completions.create(
-                model=self.config.gpt_model,
+            return self.aiclient.chat.completions.create(
+                model=self.config.GPT_MODEL,
                 messages=messages
             )
 
@@ -243,19 +225,30 @@ class Researcher:
         summary = await self.summarize_results_async(search_results)
         return summary
 
+    def just_call_openai(self, discIn):
+        messages = [{"role": "system", "content": f"{self.config.CHARACTER}"}]
+        messages.extend(self.context)
+        completion = self.aiclient.chat.completions.create(
+            model=self.config.GPT_MODEL,
+            messages=messages
+        )
+        return completion.choices[0].message.content
+
+
 class Mochio(discord.Client):
-    def __init__(self, config, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.config = config
-        self.analyst = Analyst(config)
-        self.researcher = Researcher(config)
+        self.config = Config()
+        self.context = deque(maxlen=self.config.HISTORY_LENGTH)
+        self.analyst = Analyst(self.config, self.context)
+        self.researcher = Researcher(self.config, self.context)
 
     async def on_ready(self):
         print(f'Logged in as {self.user.name}({self.user.id})')
 
     async def on_message(self, message):
         if (message.author.id == self.user.id
-                or message.channel.name not in self.config.respond_channel_name.split(',')):
+                or message.channel.name not in self.config.RESPOND_CHANNEL_NAME.split(',')):
             return
 
         if message.content.startswith('!hello'):
@@ -271,22 +264,22 @@ class Mochio(discord.Client):
         img_url = None
 
         attached_text_list = []
-        for attachment in message.attachments[:self.config.max_discord_post_attachments]:
+        for attachment in message.attachments[:self.config.MAX_DISCORD_POST_ATTACHMENTS]:
             if (attachment.content_type and attachment.content_type.startswith('image/')):
                 img_url = attachment.url
             elif attachment.content_type and (
                     attachment.content_type.startswith('application/pdf')
                     or attachment.content_type.startswith('text/html')):
-                parsed_content, ctype = await parse_discord_attachment(attachment)
+                parsed_content, ctype = await _parse_discord_attachment(attachment)
                 if parsed_content:
                     attached_text_list.append(
                         f"\n[Content from attached {ctype} file '{attachment.filename}']:\n{parsed_content}\n"
                     )
 
         urls = [word for word in msg.split() if word.startswith('http')]
-        if len(urls) > self.config.max_discord_post_urls + 1:
-            msg += f"\n[Note: {len(urls) - self.config.max_discord_post_attachments} URLs truncated]"
-            urls = urls[:self.config.max_discord_post_attachments]
+        if len(urls) > self.config.MAX_DISCORD_POST_URLS + 1:
+            msg += f"\n[Note: {len(urls) - self.config.MAX_DISCORD_POST_ATTACHMENTS} URLs truncated]"
+            urls = urls[:self.config.MAX_DISCORD_POST_ATTACHMENTS]
 
         extracted_content = []
         tasks = [self.researcher._fetch_page_content_async(url) for url in urls]
@@ -298,12 +291,12 @@ class Mochio(discord.Client):
 
             if content and (content_type in ["PDF", "HTML"]):
                 extracted_content.append(
-                    f"\n[Content from {url} ({content_type})]: {content[:self.config.max_content_length]}..."
+                    f"\n[Content from {url} ({content_type})]: {content[:self.config.MAX_CONTENT_LENGTH]}..."
                 )
             elif content and (content_type in ["Image"]):
                 img_url = url
 
-        msg = msg[:self.config.max_discord_length]
+        msg = msg[:self.config.MAX_DISCORD_LENGTH]
         msg += ''.join(extracted_content)
         msg += ''.join(attached_text_list)
 
@@ -333,69 +326,60 @@ class Mochio(discord.Client):
             if msg:
                 discIn.append({"role": "user", "content": msg})
 
-        conversation_history.extend(discIn)
+        self.context.extend(discIn)
         return discIn, img_url
 
     async def _ai_respond(self, discIn, img):
         try:
             if img:
                 print("Skipping search and calling OpenAI directly.")
-                result = self._just_call_openai(discIn)
+                result = self.researcher.just_call_openai(discIn)
             else:
                 keywords = self.analyst.analyze(discIn)
                 if keywords:
                     result = await self.researcher.search_and_summarize(keywords)
                 else:
-                    result = self._just_call_openai(discIn)
+                    result = self.researcher.just_call_openai(discIn)
             return result
         except Exception as e:
             print(f"API Call Error: {str(e)}")
             return f"Error: {str(e)}"
 
-    def _just_call_openai(self, discIn):
-        messages = [{"role": "system", "content": f"{self.config.character}"}]
-        messages.extend(conversation_history)
-        completion = client.chat.completions.create(
-            model=self.config.gpt_model,
-            messages=messages
-        )
-        return completion.choices[0].message.content
-
     async def _send_long_message(self, channel: discord.TextChannel, content: str):
-        for i in range(0, len(content), self.config.max_discord_reply_length):
-            await channel.send(content[i: i + self.config.max_discord_reply_length])
+        for i in range(0, len(content), self.config.MAX_DISCORD_REPLY_LENGTH):
+            await channel.send(content[i: i + self.config.MAX_DISCORD_REPLY_LENGTH])
 
-async def parse_discord_attachment(attachment: discord.Attachment):
-    if not attachment.content_type:
+    async def _parse_discord_attachment(self, attachment: discord.Attachment):
+        if not attachment.content_type:
+            return None, None
+
+        file_bytes = await attachment.read()
+
+        if attachment.content_type.startswith("application/pdf"):
+            try:
+                pdf_reader = PdfReader(BytesIO(file_bytes))
+                pdf_text = "".join(page.extract_text() for page in pdf_reader.pages)
+                return pdf_text[:self.config.MAX_CONTENT_LENGTH], "PDF"
+            except Exception as e:
+                print(f"Error reading PDF: {e}")
+                return None, None
+
+        elif attachment.content_type.startswith("text/html"):
+            try:
+                soup = BeautifulSoup(file_bytes, "lxml")
+                text = soup.get_text(separator='\n', strip=True)
+                return text[:self.config.MAX_CONTENT_LENGTH], "HTML"
+            except Exception as e:
+                print(f"Error reading HTML: {e}")
+                return None, None
+
         return None, None
-
-    file_bytes = await attachment.read()
-
-    if attachment.content_type.startswith("application/pdf"):
-        try:
-            pdf_reader = PdfReader(BytesIO(file_bytes))
-            pdf_text = "".join(page.extract_text() for page in pdf_reader.pages)
-            return pdf_text[:config.max_content_length], "PDF"
-        except Exception as e:
-            print(f"Error reading PDF: {e}")
-            return None, None
-
-    elif attachment.content_type.startswith("text/html"):
-        try:
-            soup = BeautifulSoup(file_bytes, "lxml")
-            text = soup.get_text(separator='\n', strip=True)
-            return text[:config.max_content_length], "HTML"
-        except Exception as e:
-            print(f"Error reading HTML: {e}")
-            return None, None
-
-    return None, None
 
 # --------------------------------- Main ---------------------------------
 intents = discord.Intents.all()
 intents.messages = True
 intents.guilds = True
 intents.message_content = True
-d_client = Mochio(config, intents=intents)
-d_client.run(config.discord_bot_token)
+d_client = Mochio(intents=intents)
+d_client.run(config.DISCORD_BOT_TOKEN)
 

@@ -9,4 +9,3 @@ docker rmi $(docker images -q)
 docker container ps
 docker images
 ./start_docker_container.sh
-
