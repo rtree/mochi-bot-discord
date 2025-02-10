@@ -468,17 +468,24 @@ class MyClient(discord.Client):
                     discIn.append(
                         {
                             "role": "user",
-                            "content": [
-                                { "type": "text", "text": f"msg" },
-                                {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": f"{data_url}",
-                                    },
-                                }
-                            ],
-                        },
-                    )
+                            "content": f"{msg}\n(画像URL: {data_url})"
+                        }
+                    )                    
+                    # discIn.append(
+                    #     {
+                    #         "role": "user",
+                    #         "content": [
+                    #             { "type": "text", "text": f"msg" },
+                    #             {
+                    #                 "type": "image_url",
+                    #                 "image_url": {
+                    #                     "url": f"{data_url}",
+                    #                 },
+                    #             }
+                    #         ],
+                    #     },
+                    # )
+
                 else:
                     if msg:
                         discIn.append({"role": "user", "content": msg})
