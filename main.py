@@ -261,7 +261,6 @@ async def summarize_results_with_pages_async(search_results):
 
     return "\n".join(content_list)
 
-
 async def summarize_results_async(search_results):
     """
     Calls GPT to summarize the combined content from search results.
@@ -461,10 +460,11 @@ class MyClient(discord.Client):
                 # Build the user portion for conversation
                 discIn = []
                 if img_url:
-                    #discIn.append({"role": "user", "content": f"{msg}\n(画像URL: {img_url})"})
+                    # Fetch the image content and encode it in base64
                     img_response = requests.get(img_url)
+                    content_type = img_response.headers['Content-Type']
                     base64_img   = base64.b64encode(img_response.content).decode('utf-8')
-                    data_url     = f"data:image/png;base64,{base64_img}"
+                    data_url     = f"data:{content_type};base64,{base64_img}"
                     discIn.append(
                         {
                             "role": "user",
