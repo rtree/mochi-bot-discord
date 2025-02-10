@@ -236,9 +236,9 @@ class Researcher:
 
 
 class Mochio(discord.Client):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, config, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.config = Config()
+        self.config = config
         self.context = deque(maxlen=self.config.HISTORY_LENGTH)
         self.analyst = Analyst(self.config, self.context)
         self.researcher = Researcher(self.config, self.context)
@@ -376,10 +376,11 @@ class Mochio(discord.Client):
         return None, None
 
 # --------------------------------- Main ---------------------------------
+config = Config()
 intents = discord.Intents.all()
 intents.messages = True
 intents.guilds = True
 intents.message_content = True
-d_client = Mochio(intents=intents)
+d_client = Mochio(config=config, intents=intents)
 d_client.run(config.DISCORD_BOT_TOKEN)
 
