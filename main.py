@@ -402,25 +402,27 @@ class MyClient(discord.Client):
 
                 # Build the user portion for conversation
                 discIn = []
+                if not msg:
+                    msg = ""
                 if img_url:
                     discIn.append({"role": "user", "content": f"{msg}\n(画像URL: {img_url})"})
                     #img_response = requests.get(img_url)
                     #base64_img   = base64.b64encode(img_response.content).decode('utf-8')
                     #data_url     = f"data:image/png;base64,{base64_img}"
-                    # discIn.append(
-                    #     {
-                    #         "role": "user",
-                    #         "content": [
-                    #             { "type": "text", "text": f"msg" },
-                    #             {
-                    #                 "type": "image_url",
-                    #                 "image_url": {
-                    #                     "url": f"{img_url}",
-                    #                 },
-                    #             }
-                    #         ],
-                    #     },
-                    # )
+                    discIn.append(
+                        {
+                            "role": "user",
+                            "content": [
+                                { "type": "text", "text": f"msg" },
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"{img_url}",
+                                    },
+                                }
+                            ],
+                        },
+                    )
                 else:
                     if msg:
                         discIn.append({"role": "user", "content": msg})
