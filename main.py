@@ -447,6 +447,10 @@ class MyClient(discord.Client):
                 print("-Agent response--------------------------------------------------------------")
                 print(f"  Response content:'{response}'")
 
+                print("-History dump--------------------------------------------------------------")
+                for conv in conversation_history:
+                    print(f"  {conv}")
+
 
 # Initialize the client with the specified intents
 d_client = MyClient(intents=intents)
