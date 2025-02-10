@@ -29,7 +29,21 @@ class Mochio(discord.Client):
         else:
             async with message.channel.typing():
                 discIn, img_url = await self._process_message(message)
-                response = await self._ai_respond(discIn, img_url)
+
+                try:
+                    if img_url:
+                        print("Skipping search and calling OpenAI directly.")
+                        response = self.researcher.just_call_openai(discIn)
+                    else:
+                        keywords = self.analyst.analyze(discIn)
+                        if keywords:
+                            response = await self.researcher.search_and_summarize(keywords)
+                        else:
+                            response = self.researcher.just_call_openai(discIn)
+                except Exception as e:
+                    print(f"API Call Error: {str(e)}")
+                    return f"Error: {str(e)}"
+
                 await self._send_long_message(message.channel, response)
 
     async def _process_message(self, message):
@@ -101,22 +115,6 @@ class Mochio(discord.Client):
 
         self.context.extend(discIn)
         return discIn, img_url
-
-    async def _ai_respond(self, discIn, img):
-        try:
-            if img:
-                print("Skipping search and calling OpenAI directly.")
-                result = self.researcher.just_call_openai(discIn)
-            else:
-                keywords = self.analyst.analyze(discIn)
-                if keywords:
-                    result = await self.researcher.search_and_summarize(keywords)
-                else:
-                    result = self.researcher.just_call_openai(discIn)
-            return result
-        except Exception as e:
-            print(f"API Call Error: {str(e)}")
-            return f"Error: {str(e)}"
 
     async def _send_long_message(self, channel: discord.TextChannel, content: str):
         for i in range(0, len(content), self.config.MAX_DISCORD_REPLY_LENGTH):
