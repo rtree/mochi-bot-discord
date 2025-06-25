@@ -4,6 +4,7 @@ from collections import deque
 from bs4 import BeautifulSoup
 from PyPDF2 import PdfReader
 from io import BytesIO
+import requests
 from config import Config
 from colleagues.analyst import Analyst
 from colleagues.researcher import Researcher
@@ -94,7 +95,7 @@ class Mochio(discord.Client):
         discIn = []
         if not msg:
             msg = ""
-        if img_url:
+        if img_url and await self._validate_image_url(img_url):
             discIn.append(
                 {
                     "role": "user",
@@ -110,6 +111,8 @@ class Mochio(discord.Client):
                 },
             )
         else:
+            if img_url:
+                print(f"Discarding inaccessible image URL: {img_url}")
             if msg:
                 discIn.append({"role": "user", "content": msg})
 
@@ -119,6 +122,19 @@ class Mochio(discord.Client):
     async def _send_long_message(self, channel: discord.TextChannel, content: str):
         for i in range(0, len(content), self.config.MAX_DISCORD_REPLY_LENGTH):
             await channel.send(content[i: i + self.config.MAX_DISCORD_REPLY_LENGTH])
+
+    async def _validate_image_url(self, url: str) -> bool:
+        """Check whether the image URL is accessible."""
+        def blocking_check():
+            try:
+                resp = requests.get(url, timeout=5)
+                resp.raise_for_status()
+                return resp.headers.get("Content-Type", "").startswith("image/")
+            except Exception as e:
+                print(f"Image URL validation failed for {url}: {e}")
+                return False
+
+        return await asyncio.to_thread(blocking_check)
 
     async def _parse_discord_attachment(self, attachment: discord.Attachment):
         if not attachment.content_type:
