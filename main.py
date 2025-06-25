@@ -1,6 +1,7 @@
 import discord
 import asyncio
 from collections import deque
+from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 from PyPDF2 import PdfReader
 from io import BytesIO
@@ -16,6 +17,7 @@ class Mochio(discord.Client):
         self.context = deque(maxlen=self.config.HISTORY_LENGTH)
         self.analyst = Analyst(self.config, self.context)
         self.researcher = Researcher(self.config, self.context)
+        self.last_message_time = None
 
     async def on_ready(self):
         print(f'Logged in as {self.user.name}({self.user.id})')
@@ -24,6 +26,14 @@ class Mochio(discord.Client):
         if (message.author.id == self.user.id
                 or message.channel.name not in self.config.RESPOND_CHANNEL_NAME.split(',')):
             return
+
+        if self.last_message_time:
+            elapsed = message.created_at - self.last_message_time
+            if elapsed > timedelta(hours=1):
+                print("Context cleared due to inactivity over 1 hour.")
+                self.context.clear()
+
+        self.last_message_time = message.created_at
 
         if message.content.startswith('!hello'):
             await message.channel.send('Hello!')
