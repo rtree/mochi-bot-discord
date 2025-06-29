@@ -8,7 +8,8 @@ from io import BytesIO
 import requests
 from config import Config
 from colleagues.analyst import Analyst
-from colleagues.researcher import Researcher
+#from colleagues.researcher import Researcher
+from colleagues.researcherG import Researcher
 
 class Mochio(discord.Client):
     def __init__(self, config, *args, **kwargs):

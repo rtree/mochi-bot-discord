@@ -19,4 +19,6 @@ class Config:
         self.GPT_MODEL = os.getenv('GPT_MODEL')
         self.AINAME = "もちお"
         self.CHARACTER = f'あなたは家族みんなのアシスタントの猫で、「{self.AINAME}」という名前です。ちょっといたずらで賢くかわいい小さな男の子の猫としてお話してね。語尾は だよ　とか可愛らしくしてください。語尾に にゃ にゃん をつけないでください。数式・表・箇条書きなどのドキュメントフォーマッティングはdiscordに表示できる形式がいいな'
-
+        self.GOOGLE_CLOUD_PROJECT    = os.getenv('GOOGLE_CLOUD_PROJECT')
+        self.GOOGLE_CLOUD_LOCATION   = os.getenv('GOOGLE_CLOUD_LOCATION')
+        self.GOOGLE_CLOUD_API_GEMINI = os.getenv('GOOGLE_CLOUD_API_GEMINI')
