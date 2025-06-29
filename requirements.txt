@@ -7,7 +7,7 @@ beautifulsoup4
 lxml
 PyPDF2
 pycryptodome
-
+google-genai
 # sudo service docker start
 # docker build -t asia-northeast1-docker.pkg.dev/rtree-377503/cloudrun-mochi-bot-discord/mochi-bot-discord .
 # DISPLAY=":0" gcloud auth login
