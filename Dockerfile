@@ -11,7 +11,7 @@ WORKDIR $APP_HOME
 COPY . ./
 
 # Install production dependencies.
-RUN pip install discord.py requests python-dotenv asyncio openai beautifulsoup4 lxml PyPDF2 pycryptodome
+RUN pip install -r requirements.txt
 
 # Run the web service on container startup. Here we use the basic
 # web server provided by Python. You should adjust the command to run
