@@ -34,8 +34,6 @@ class Researcher:
         os.environ["GOOGLE_CLOUD_MODEL"]    = os.getenv("GOOGLE_CLOUD_MODEL",self.config.GOOGLE_CLOUD_MODEL)
 
 
-
-
         # Initialize Gemini client
         api_key = os.getenv("GOOGLE_CLOUD_API_GEMINI", getattr(self.config, "GOOGLE_CLOUD_API_GEMINI", None))
         client = genai.Client(vertexai=False, api_key=api_key)
