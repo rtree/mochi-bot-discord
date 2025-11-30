@@ -10,6 +10,7 @@ from config import Config
 from colleagues.analyst import Analyst
 #from colleagues.researcher import Researcher
 from colleagues.researcherG import Researcher
+from colleagues.auditor import Auditor
 
 class Mochio(discord.Client):
     def __init__(self, config, *args, **kwargs):
@@ -19,6 +20,7 @@ class Mochio(discord.Client):
         self.dm_contexts = {}  # DM用のユーザーごとの履歴
         self.analyst = Analyst(self.config, self.context)
         self.researcher = Researcher(self.config, self.context)
+        self.auditor = Auditor(config=self.config, discord_client=self)  # ログ記録・精神状態監視用
         self.last_message_time = None
         self.dm_last_message_times = {}  # DM用のユーザーごとの最終メッセージ時刻
 
@@ -52,6 +54,7 @@ class Mochio(discord.Client):
                 elapsed = message.created_at - self.dm_last_message_times[user_id]
                 if elapsed > timedelta(hours=1):
                     print(f"DM context cleared for user {user_id} due to inactivity over 1 hour.")
+                    self.auditor.log_context_clear("dm", user_id, "inactivity over 1 hour")
                     current_context.clear()
             self.dm_last_message_times[user_id] = message.created_at
         else:
@@ -66,6 +69,7 @@ class Mochio(discord.Client):
                 elapsed = message.created_at - self.last_message_time
                 if elapsed > timedelta(hours=1):
                     print("Channel context cleared due to inactivity over 1 hour.")
+                    self.auditor.log_context_clear("channel", reason="inactivity over 1 hour")
                     current_context.clear()
             self.last_message_time = message.created_at
 
@@ -77,22 +81,50 @@ class Mochio(discord.Client):
             await message.channel.send('Hello!')
         else:
             async with message.channel.typing():
+                # ソース種別を判定
+                source = "dm" if is_dm else "channel"
+                
                 discIn, img_url = await self._process_message(message)
+                
+                # ユーザーメッセージをログに記録
+                self.auditor.log_message(source, message.author.id, message.author.name, message.content)
+                
+                # 精神状態チェックをバックグラウンドで実行（メインの応答をブロックしない）
+                asyncio.create_task(
+                    self.auditor.audit_mental_state_async(
+                        source, 
+                        message.author.id, 
+                        message.author.name,
+                        message.content,
+                        list(current_context)
+                    )
+                )
 
                 try:
                     if img_url:
                         print("Skipping search and calling OpenAI directly.")
+                        # APIコールをログに記録
+                        api_messages = [{"role": "system", "content": self.config.CHARACTER}]
+                        api_messages.extend(self.researcher.context)
+                        self.auditor.log_api_call(source, message.author.id, message.author.name, api_messages)
                         response = self.researcher.just_call_openai(discIn)
                     else:
                         keywords = self.analyst.analyze(discIn)
                         if keywords:
                             response = await self.researcher.search_and_summarize(keywords)
                         else:
+                            # APIコールをログに記録
+                            api_messages = [{"role": "system", "content": self.config.CHARACTER}]
+                            api_messages.extend(self.researcher.context)
+                            self.auditor.log_api_call(source, message.author.id, message.author.name, api_messages)
                             response = self.researcher.just_call_openai(discIn)
                 except Exception as e:
                     print(f"API Call Error: {str(e)}")
                     return f"Error: {str(e)}"
 
+                # ボット応答をログに記録
+                self.auditor.log_response(source, message.author.id, message.author.name, response)
+                
                 await self._send_long_message(message.channel, response)
 
     async def _process_message(self, message):
