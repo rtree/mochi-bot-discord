@@ -24,9 +24,24 @@ class Mochio(discord.Client):
         print(f'Logged in as {self.user.name}({self.user.id})')
 
     async def on_message(self, message):
-        if (message.author.id == self.user.id
-                or message.channel.name not in self.config.RESPOND_CHANNEL_NAME.split(',')):
+        # 自分自身のメッセージは無視
+        if message.author.id == self.user.id:
             return
+
+        # DMかどうかを判定
+        is_dm = isinstance(message.channel, discord.DMChannel)
+
+        if is_dm:
+            # DMの場合：ボットと同じサーバーに所属しているユーザーのみ応答
+            is_shared_guild = any(
+                message.author in guild.members for guild in self.guilds
+            )
+            if not is_shared_guild:
+                return
+        else:
+            # サーバーチャンネルの場合：設定されたチャンネル名のみ応答
+            if message.channel.name not in self.config.RESPOND_CHANNEL_NAME.split(','):
+                return
 
         if self.last_message_time:
             elapsed = message.created_at - self.last_message_time
