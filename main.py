@@ -15,10 +15,12 @@ class Mochio(discord.Client):
     def __init__(self, config, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.config = config
-        self.context = deque(maxlen=self.config.HISTORY_LENGTH)
+        self.context = deque(maxlen=self.config.HISTORY_LENGTH)  # チャンネル用の共通履歴
+        self.dm_contexts = {}  # DM用のユーザーごとの履歴
         self.analyst = Analyst(self.config, self.context)
         self.researcher = Researcher(self.config, self.context)
         self.last_message_time = None
+        self.dm_last_message_times = {}  # DM用のユーザーごとの最終メッセージ時刻
 
     async def on_ready(self):
         print(f'Logged in as {self.user.name}({self.user.id})')
@@ -38,18 +40,38 @@ class Mochio(discord.Client):
             )
             if not is_shared_guild:
                 return
+            
+            # DM用のユーザーごとの履歴を取得または作成
+            user_id = message.author.id
+            if user_id not in self.dm_contexts:
+                self.dm_contexts[user_id] = deque(maxlen=self.config.HISTORY_LENGTH)
+            current_context = self.dm_contexts[user_id]
+            
+            # DM用の最終メッセージ時刻チェック
+            if user_id in self.dm_last_message_times:
+                elapsed = message.created_at - self.dm_last_message_times[user_id]
+                if elapsed > timedelta(hours=1):
+                    print(f"DM context cleared for user {user_id} due to inactivity over 1 hour.")
+                    current_context.clear()
+            self.dm_last_message_times[user_id] = message.created_at
         else:
             # サーバーチャンネルの場合：設定されたチャンネル名のみ応答
             if message.channel.name not in self.config.RESPOND_CHANNEL_NAME.split(','):
                 return
+            
+            current_context = self.context
+            
+            # チャンネル用の最終メッセージ時刻チェック
+            if self.last_message_time:
+                elapsed = message.created_at - self.last_message_time
+                if elapsed > timedelta(hours=1):
+                    print("Channel context cleared due to inactivity over 1 hour.")
+                    current_context.clear()
+            self.last_message_time = message.created_at
 
-        if self.last_message_time:
-            elapsed = message.created_at - self.last_message_time
-            if elapsed > timedelta(hours=1):
-                print("Context cleared due to inactivity over 1 hour.")
-                self.context.clear()
-
-        self.last_message_time = message.created_at
+        # 現在の会話用にanalystとresearcherのcontextを切り替え
+        self.analyst.context = current_context
+        self.researcher.context = current_context
 
         if message.content.startswith('!hello'):
             await message.channel.send('Hello!')
@@ -142,7 +164,8 @@ class Mochio(discord.Client):
             if msg:
                 discIn.append({"role": "user", "content": msg})
 
-        self.context.extend(discIn)
+        # 現在のcontextに追加（analyst/researcherで切り替え済みのcontextを使用）
+        self.analyst.context.extend(discIn)
         return discIn, img_url
 
     async def _send_long_message(self, channel: discord.TextChannel, content: str):
