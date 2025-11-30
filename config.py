@@ -23,3 +23,4 @@ class Config:
         self.GOOGLE_CLOUD_LOCATION   = os.getenv('GOOGLE_CLOUD_LOCATION')
         self.GOOGLE_CLOUD_API_GEMINI = os.getenv('GOOGLE_CLOUD_API_GEMINI')
         self.GOOGLE_CLOUD_MODEL       = os.getenv('GOOGLE_CLOUD_MODEL')
+        self.LOG_DIR = os.getenv('LOG_DIR', 'log')  # ログディレクトリ（デフォルト: log）

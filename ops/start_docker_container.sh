@@ -16,7 +16,17 @@ elif [ $(docker ps -aq -f status=exited -f name=^/${CONTAINER_NAME}$) ]; then
 else
     echo "Container ${CONTAINER_NAME} does not exist. Running container..."
     cd ${FOLDER}
+    
+    # .envからLOG_DIRを読み取り
+    LOG_DIR=$(grep -E '^LOG_DIR=' ${ENVFILE} | cut -d '=' -f2)
+    if [ -n "${LOG_DIR}" ]; then
+        mkdir -p ${LOG_DIR}
+        VOLUME_OPT="-v ${LOG_DIR}:${LOG_DIR}"
+    else
+        VOLUME_OPT=""
+    fi
+    
     docker build -t mochi-bot-discord .
-    docker run -d --env-file=${ENVFILE} --name ${CONTAINER_NAME} mochi-bot-discord
+    docker run -d --env-file=${ENVFILE} ${VOLUME_OPT} --name ${CONTAINER_NAME} mochi-bot-discord
 fi
 docker update --restart unless-stopped $(docker ps -q)

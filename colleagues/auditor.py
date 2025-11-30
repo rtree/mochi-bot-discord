@@ -4,11 +4,16 @@ from datetime import datetime
 from openai import OpenAI
 
 class Auditor:
-    def __init__(self, config=None, discord_client=None, log_dir="log"):
-        self.log_dir = log_dir
+    def __init__(self, config=None, discord_client=None):
         self.config = config
         self.discord_client = discord_client
         self.alert_channel_name = "バーチャルもちお開発室"
+        
+        # ログディレクトリをconfigから取得（Dockerのマウントポイント対応）
+        if config and hasattr(config, 'LOG_DIR'):
+            self.log_dir = config.LOG_DIR
+        else:
+            self.log_dir = "log"
         os.makedirs(self.log_dir, exist_ok=True)
         
         if config:
